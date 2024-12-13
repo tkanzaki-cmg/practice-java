@@ -1,40 +1,154 @@
 package practice.java.com;
 
-import com.theokanning.openai.completion.CompletionRequest;
-import com.theokanning.openai.service.OpenAiService;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Scanner;
+import java.util.stream.Collectors;
 
 import io.github.cdimascio.dotenv.Dotenv;
 
+import org.json.JSONObject;
+
 public class Main {
     public static void main(String[] args) {
-        // .env からAPIキーを取得
+        // Load API key from .env file
         var dotenv = Dotenv.load();
-        var api_key = dotenv.get("API_KEY");
-        
-        // タイトルを抽出するテキスト
-        var text = "The Great Gatsby is a 1925 novel by American writer F. Scott Fitzgerald. Set in the Jazz Age on Long Island, near New York City, the novel depicts first-person narrator Nick Carraway's interactions with mysterious millionaire Jay Gatsby and Gatsby's obsession to reunite with his former lover, Daisy Buchanan.";
-        var responce = extractTitleUsingOpenAI(api_key, text);
-        System.out.println(responce);
-    }
-    
-    private static String extractTitleUsingOpenAI(String apiKey, String text) {
+        var apiKey = dotenv.get("API_KEY");
+
+        // Hardcoded question texts
+        var questionTexts = List.of(
+            "SC10 あなたはオンラインクレーンゲームを知っていますか。（SA）",
+            "SC3 最近、最も頻繁に使用しているSNSはどれですか。／Instagram(SA)",
+            "SC15_2 あなたの趣味の中で、最も時間を費やしているものは何ですか。（MA）",
+            "SC21 スポーツ観戦に興味がありますか。それとも、実際に参加することを好みますか。（SA）",
+            "SC12_4 あなたがよく行く旅行先のタイプは何ですか。（例：温泉地、都市部など）（MA）",
+            "SC8 最近読んだ本の中で特に印象に残ったジャンルを教えてください。（SA）",
+            "SC18 映画館で映画を観る頻度はどのくらいですか。（例：週1回、月1回など）（SA）",
+            "SC14_1 以下の楽器の中で演奏経験があるものを教えてください。／ピアノ(SA)",
+            "SC20 動物を飼うことで得られる良い点は何だと思いますか。（MA）",
+            "SC11_3 ゲームの中で最も好きなジャンルは何ですか。（例：RPG、シューティング、シミュレーション）（SA）"
+        );
+
         try {
-            var openAiService = new OpenAiService(apiKey);
-    
-            var prompt = String.format("Extract the title of the following text:\n\n%s", text);
-            var completionRequest = CompletionRequest.builder()
-                    .prompt(prompt)
-                    .model("babbage-002")
-                    .maxTokens(50)
-                    .temperature(0.7)
-                    .build();
-    
-            var response = openAiService.createCompletion(completionRequest);
-            return response.getChoices().get(0).getText().trim();
-        } catch (Exception e) {
+            // Read supporting files
+            var goalText = readFileFromResources("ゴールと変数の定義.txt");
+            var outputFormatText = readFileFromResources("出力形式.txt");
+            var constraintsText = readFileFromResources("制約事項.txt");
+            var prerequisitesText = readFileFromResources("前提条件.txt");
+            var stepsText = readFileFromResources("手順と実行プロセス.txt");
+
+            // Generate prompt text for all questions
+            var requestText = String.format(
+                    "以下の条件を元に複数の設問文からタイトルを抽出してください。\n\n" +
+                            "ゴールと変数の定義:\n%s\n\n" +
+                            "出力形式:\n%s\n\n" +
+                            "制約事項:\n%s\n\n" +
+                            "前提条件:\n%s\n\n" +
+                            "手順と実行プロセス:\n%s\n\n" +
+                            "設問文:\n%s",
+                    goalText, outputFormatText, constraintsText, prerequisitesText, stepsText,
+                    String.join("\n", questionTexts)
+            );
+
+            // Call OpenAI API
+            var response = extractTitlesUsingOpenAI(apiKey, requestText);
+
+            // Print results
+            System.out.println("プロンプト:\n" + requestText);
+            System.out.println("抽出されたタイトル:");
+            for (int i = 0; i < response.size(); i++) {
+                System.out.printf("設問 %d: %s\n", i + 1, response.get(i));
+            }
+
+        } catch (IOException e) {
+            System.err.println("エラー: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static String readFileFromResources(String fileName) throws IOException {
+        var classLoader = Main.class.getClassLoader();
+        var resource = classLoader.getResource(fileName);
+        if (resource == null) {
+            throw new IOException("リソースファイルが見つかりません: " + fileName);
+        }
+        try {
+            Path filePath = Path.of(resource.toURI());
+            return Files.lines(filePath).collect(Collectors.joining("\n"));
+        } catch (URISyntaxException e) {
+            throw new IOException("URI の形式が不正です: " + resource, e);
+        }
+    }
+
+    private static List<String> extractTitlesUsingOpenAI(String apiKey, String text) {
+        try {
+            String apiUrl = "https://api.openai.com/v1/chat/completions";
+
+            // Create request body
+            String requestBody = String.format(
+                    """
+                            {
+                                "model": "gpt-3.5-turbo",
+                                "messages": [
+                                    {"role": "system", "content": "You are a helpful assistant."},
+                                    {"role": "user", "content": "%s"}
+                                ],
+                                "max_tokens": 500,
+                                "temperature": 0.7
+                            }
+                            """,
+                    text.replace("\n", "\\n"));
+
+            // Open connection
+            HttpURLConnection connection = (HttpURLConnection) new URL(apiUrl).openConnection();
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Authorization", "Bearer " + apiKey);
+            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setDoOutput(true);
+
+            // Send request body
+            try (OutputStream os = connection.getOutputStream()) {
+                os.write(requestBody.getBytes(StandardCharsets.UTF_8));
+            }
+
+            // Check response code
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                try (Scanner errorScanner = new Scanner(connection.getErrorStream(), StandardCharsets.UTF_8)) {
+                    String errorBody = errorScanner.useDelimiter("\\A").next();
+                    System.err.println("エラーレスポンス: " + errorBody);
+                }
+                throw new IOException("APIリクエストに失敗しました。ステータスコード: " + responseCode);
+            }
+
+            // Parse response
+            try (Scanner scanner = new Scanner(connection.getInputStream(), StandardCharsets.UTF_8)) {
+                String responseBody = scanner.useDelimiter("\\A").next();
+                System.out.println("OpenAI APIレスポンス: " + responseBody);
+
+                // Parse JSON and extract "content"
+                JSONObject jsonResponse = new JSONObject(responseBody);
+                String content = jsonResponse
+                        .getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content");
+
+                // Split the response into individual titles
+                return List.of(content.split("\n"));
+            }
+
+        } catch (IOException e) {
             System.err.println("API呼び出しに失敗しました: " + e.getMessage());
             e.printStackTrace();
-            return "エラー: API呼び出しに失敗しました。";
+            return List.of("エラー: API呼び出しに失敗しました。");
         }
-    }    
+    }
 }
