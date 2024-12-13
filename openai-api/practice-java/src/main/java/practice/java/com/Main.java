@@ -21,6 +21,7 @@ public class Main {
         // Load API key from .env file
         var dotenv = Dotenv.load();
         var apiKey = dotenv.get("API_KEY");
+        var model = dotenv.get("MODEL", "gpt-3.5-turbo"); // デフォルトを指定
 
         // Hardcoded question texts
         var questionTexts = List.of(
@@ -58,7 +59,7 @@ public class Main {
             );
 
             // Call OpenAI API
-            var response = extractTitlesUsingOpenAI(apiKey, requestText);
+            var response = extractTitlesUsingOpenAI(apiKey, model, requestText);
 
             // Print results
             System.out.println("プロンプト:\n" + requestText);
@@ -87,7 +88,7 @@ public class Main {
         }
     }
 
-    private static List<String> extractTitlesUsingOpenAI(String apiKey, String text) {
+    private static List<String> extractTitlesUsingOpenAI(String apiKey, String model, String text) {
         try {
             String apiUrl = "https://api.openai.com/v1/chat/completions";
 
@@ -95,7 +96,7 @@ public class Main {
             String requestBody = String.format(
                     """
                             {
-                                "model": "gpt-3.5-turbo",
+                                "model": "%s",
                                 "messages": [
                                     {"role": "system", "content": "You are a helpful assistant."},
                                     {"role": "user", "content": "%s"}
@@ -104,7 +105,7 @@ public class Main {
                                 "temperature": 0.7
                             }
                             """,
-                    text.replace("\n", "\\n"));
+                    model, text.replace("\n", "\\n"));
 
             // Open connection
             HttpURLConnection connection = (HttpURLConnection) new URL(apiUrl).openConnection();
