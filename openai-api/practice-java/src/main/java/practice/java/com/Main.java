@@ -39,11 +39,11 @@ public class Main {
 
         try {
             // Read supporting files
-            var goalText = readFileFromResources("ゴールと変数の定義.txt");
-            var outputFormatText = readFileFromResources("出力形式.txt");
-            var constraintsText = readFileFromResources("制約事項.txt");
-            var prerequisitesText = readFileFromResources("前提条件.txt");
-            var stepsText = readFileFromResources("手順と実行プロセス.txt");
+            String goalText = readFileFromResources("ゴールと変数の定義.txt");
+            String outputFormatText = readFileFromResources("出力形式.txt");
+            String constraintsText = readFileFromResources("制約事項.txt");
+            String prerequisitesText = readFileFromResources("前提条件.txt");
+            String stepsText = readFileFromResources("手順と実行プロセス.txt");
 
             // Generate prompt text for all questions
             var requestText = String.format(
@@ -59,7 +59,7 @@ public class Main {
             );
 
             // Call OpenAI API
-            var response = extractTitlesUsingOpenAI(apiKey, model, requestText);
+            List<String> response = extractTitlesUsingOpenAI(apiKey, model, requestText);
 
             // Print results
             System.out.println("プロンプト:\n" + requestText);
@@ -81,7 +81,7 @@ public class Main {
             throw new IOException("リソースファイルが見つかりません: " + fileName);
         }
         try {
-            Path filePath = Path.of(resource.toURI());
+            var filePath = Path.of(resource.toURI());
             return Files.lines(filePath).collect(Collectors.joining("\n"));
         } catch (URISyntaxException e) {
             throw new IOException("URI の形式が不正です: " + resource, e);
@@ -90,10 +90,10 @@ public class Main {
 
     private static List<String> extractTitlesUsingOpenAI(String apiKey, String model, String text) {
         try {
-            String apiUrl = "https://api.openai.com/v1/chat/completions";
+            var apiUrl = "https://api.openai.com/v1/chat/completions";
 
             // Create request body
-            String requestBody = String.format(
+            var requestBody = String.format(
                     """
                             {
                                 "model": "%s",
@@ -108,35 +108,35 @@ public class Main {
                     model, text.replace("\n", "\\n"));
 
             // Open connection
-            HttpURLConnection connection = (HttpURLConnection) new URL(apiUrl).openConnection();
+            var connection = (HttpURLConnection) new URL(apiUrl).openConnection();
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Authorization", "Bearer " + apiKey);
             connection.setRequestProperty("Content-Type", "application/json");
             connection.setDoOutput(true);
 
             // Send request body
-            try (OutputStream os = connection.getOutputStream()) {
+            try (var os = connection.getOutputStream()) {
                 os.write(requestBody.getBytes(StandardCharsets.UTF_8));
             }
 
             // Check response code
-            int responseCode = connection.getResponseCode();
+            var responseCode = connection.getResponseCode();
             if (responseCode != 200) {
-                try (Scanner errorScanner = new Scanner(connection.getErrorStream(), StandardCharsets.UTF_8)) {
-                    String errorBody = errorScanner.useDelimiter("\\A").next();
+                try (var errorScanner = new Scanner(connection.getErrorStream(), StandardCharsets.UTF_8)) {
+                    var errorBody = errorScanner.useDelimiter("\\A").next();
                     System.err.println("エラーレスポンス: " + errorBody);
                 }
                 throw new IOException("APIリクエストに失敗しました。ステータスコード: " + responseCode);
             }
 
             // Parse response
-            try (Scanner scanner = new Scanner(connection.getInputStream(), StandardCharsets.UTF_8)) {
-                String responseBody = scanner.useDelimiter("\\A").next();
+            try (var scanner = new Scanner(connection.getInputStream(), StandardCharsets.UTF_8)) {
+                var responseBody = scanner.useDelimiter("\\A").next();
                 System.out.println("OpenAI APIレスポンス: " + responseBody);
 
                 // Parse JSON and extract "content"
-                JSONObject jsonResponse = new JSONObject(responseBody);
-                String content = jsonResponse
+                var jsonResponse = new JSONObject(responseBody);
+                var content = jsonResponse
                         .getJSONArray("choices")
                         .getJSONObject(0)
                         .getJSONObject("message")
