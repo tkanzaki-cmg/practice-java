@@ -20,7 +20,7 @@ public class Main {
     public static void main(String[] args) {
         // Load API key from .env file
         var dotenv = Dotenv.load();
-        var apiKey = dotenv.get("API_KEY");
+        var apiKey = dotenv.get("OPENAI_API_KEY");
         var model = dotenv.get("MODEL", "gpt-3.5-turbo"); // デフォルトを指定
 
         // Hardcoded question texts
